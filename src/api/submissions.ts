@@ -60,6 +60,8 @@ export function normaliseRow(raw: any): SubmissionSummary {
     categoryId: String(raw.categoryId ?? raw.category_id ?? ''),
     categoryName: raw.categoryName ?? raw.category_name ?? raw.categoryId ?? '',
     submittedAt: raw.uploadedAt ?? raw.submittedAt ?? raw.submitted_at ?? raw.createdAt ?? raw.created_at ?? raw.createdDate ?? raw.created_date ?? '',
+    supplierName: raw.supplierName ?? raw.supplier_name ?? null,
+    invoiceNo: raw.invoiceNo ?? raw.invoice_no ?? raw.invoiceNumber ?? raw.invoice_number ?? null,
   };
 }
 
@@ -76,6 +78,7 @@ function normaliseDetail(raw: any): SubmissionDetail {
     warrantyStatus: raw.warrantyStatus ?? raw.warranty_status,
     extractedDocuments: (raw.documents ?? raw.extractedDocuments ?? raw.extracted_documents ?? []).map((doc: any) => ({
       documentType: doc.docType ?? doc.documentType ?? doc.document_type ?? 'Document',
+      originalFilename: doc.originalFilename ?? doc.original_filename ?? doc.filename ?? doc.fileRef ?? doc.file_ref ?? null,
       fields: doc.fields ?? {},
       lineItems: (doc.lineItems ?? doc.line_items ?? []).map((item: any) => ({
         description: item.description,
@@ -152,15 +155,9 @@ export const submissionsApi = {
    * All files for a type are appended under the same lowercase key so the
    * backend can collect them as a list.
    */
-  async create(categoryId: string, files: Record<string, File[]>, saveAsGroup?: boolean, groupName?: string): Promise<SubmissionDetail> {
+  async create(categoryId: string, files: Record<string, File[]>): Promise<SubmissionDetail> {
     const form = new FormData();
     form.append('billCategoryId', categoryId);
-    if (saveAsGroup !== undefined) {
-      form.append('saveAsGroup', String(saveAsGroup));
-    }
-    if (groupName) {
-      form.append('groupName', groupName);
-    }
     for (const [docType, fileList] of Object.entries(files)) {
       let key = docType.trim().toLowerCase();
       
@@ -196,6 +193,25 @@ export const submissionsApi = {
   },
 
   /**
+   * Delete a single document file from an existing submission.
+   * DELETE /api/submissions/{id}/files/{docType}
+   * Returns the updated submission.
+   */
+  async deleteFile(id: string, docType: string): Promise<SubmissionDetail> {
+    let key = docType.trim().toLowerCase();
+    if (key.includes('invoice')) key = 'invoice';
+    else if (key.includes('po') || key.includes('purchase')) key = 'po';
+    else if (key.includes('grn') || key.includes('goods')) key = 'grn';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await apiClient.delete<any>(`/submissions/${id}/files/${key}`);
+    // If the endpoint returns 204/empty, re-fetch the full submission
+    if (!raw || !raw.id) {
+      return submissionsApi.getById(id);
+    }
+    return normaliseDetail(raw);
+  },
+
+  /**
    * Re-run verification on an existing submission.
    * POST /api/submissions/{id}/rerun — returns the updated submission.
    */
@@ -207,5 +223,13 @@ export const submissionsApi = {
 
   override(id: string, payload: OverrideRequest): Promise<OverrideResponse> {
     return apiClient.post<OverrideResponse>(`/submissions/${id}/override`, payload);
+  },
+
+  /**
+   * Delete an entire submission.
+   * DELETE /api/submissions/{id}
+   */
+  async deleteSubmission(id: string): Promise<void> {
+    await apiClient.delete(`/submissions/${id}`);
   },
 };

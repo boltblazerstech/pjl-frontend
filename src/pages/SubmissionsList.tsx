@@ -151,7 +151,10 @@ export default function SubmissionsList() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Bill Category
+                Supplier
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Invoice No.
               </th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Status
@@ -168,7 +171,7 @@ export default function SubmissionsList() {
               /* skeleton rows */
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {[1, 2, 3, 4].map((j) => (
+                  {[1, 2, 3, 4, 5].map((j) => (
                     <td key={j} className="px-6 py-4">
                       <div className="h-4 bg-gray-100 rounded animate-pulse" />
                     </td>
@@ -177,7 +180,7 @@ export default function SubmissionsList() {
               ))
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500">
+                <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
                   No submissions found.
                 </td>
               </tr>
@@ -185,7 +188,10 @@ export default function SubmissionsList() {
               rows.map((row) => (
                 <tr key={row.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {row.categoryName}
+                    {row.supplierName ?? <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">
+                    {row.invoiceNo ?? <span className="text-gray-400">—</span>}
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge status={row.status} />

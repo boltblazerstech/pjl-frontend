@@ -29,6 +29,8 @@ export interface SubmissionSummary {
   categoryId: string;
   categoryName: string;
   submittedAt: string;
+  supplierName?: string | null;
+  invoiceNo?: string | null;
 }
 
 export interface PaginatedSubmissions {
@@ -50,6 +52,8 @@ export interface LineItem {
 export interface ExtractedDocument {
   /** e.g. "Invoice", "PO", "GRN" */
   documentType: string;
+  /** Original uploaded filename, e.g. "Invoice-9.pdf" */
+  originalFilename?: string | null;
   fields: Record<string, string | number | null>;
   lineItems?: LineItem[];
 }
@@ -114,32 +118,4 @@ export interface OverrideResponse {
   success: boolean;
   submission: SubmissionDetail;
   message?: string;
-}
-
-// ─── Groups ──────────────────────────────────────────────────────────────────
-
-export interface GroupSummary {
-  id: string;
-  name: string;
-  categoryId: string;
-  categoryName: string;
-  runCount: number;
-  createdAt: string;
-}
-
-export interface GroupFile {
-  docType: string;
-  filename: string;
-}
-
-export interface GroupDetail extends GroupSummary {
-  files: GroupFile[];
-  runs: SubmissionSummary[];
-}
-
-export interface PaginatedGroups {
-  data: GroupSummary[];
-  total: number;
-  page: number;
-  pageSize: number;
 }

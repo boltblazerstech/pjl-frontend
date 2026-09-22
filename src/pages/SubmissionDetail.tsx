@@ -46,26 +46,37 @@ function ExtractedDocCard({
   onReplaced: (updated: SubmissionDetail) => void;
 }) {
   const [replacing, setReplacing] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const hasFile = !!doc.originalFilename;
 
   const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
     setReplacing(true);
-    setSuccess(false);
-    setError(null);
+    setActionError(null);
     try {
       const updated = await submissionsApi.replaceFile(submissionId, doc.documentType, file);
       onReplaced(updated);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to replace file.');
+      setActionError(err instanceof Error ? err.message : 'Failed to upload file.');
     } finally {
       setReplacing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setActionError(null);
+    try {
+      const updated = await submissionsApi.deleteFile(submissionId, doc.documentType);
+      onReplaced(updated);
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : 'Failed to delete file.');
+      setDeleting(false);
     }
   };
 
@@ -76,24 +87,41 @@ function ExtractedDocCard({
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      {/* Card header with Replace button */}
-      <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-gray-800">{doc.documentType}</h4>
-        <div className="flex items-center gap-2">
-          {success && (
-            <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
-              Replaced
-            </span>
+      {/* Card header */}
+      <div className="bg-gray-50 px-4 py-2.5 border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Doc type label */}
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wide flex-shrink-0">
+            {doc.documentType}
+          </span>
+          {hasFile ? (
+            <>
+              {/* Separator */}
+              <span className="text-gray-300">·</span>
+              {/* Filename */}
+              <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700 truncate">
+                <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+                <span className="truncate">{doc.originalFilename}</span>
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-gray-400 italic">No file uploaded</span>
           )}
-          {error && (
-            <span className="text-xs text-red-600 truncate max-w-48">{error}</span>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {actionError && (
+            <span className="text-xs text-red-600 max-w-xs truncate">{actionError}</span>
           )}
+
+          {/* Upload / Replace button */}
           <button
             type="button"
-            disabled={replacing}
+            disabled={replacing || deleting}
             onClick={() => inputRef.current?.click()}
             className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
           >
@@ -111,7 +139,7 @@ function ExtractedDocCard({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                Replace file
+                {hasFile ? 'Replace' : 'Upload'}
               </>
             )}
           </button>
@@ -122,67 +150,101 @@ function ExtractedDocCard({
             onChange={handleFileChange}
             className="hidden"
           />
+
+          {/* Delete button — only shown when a file exists */}
+          {hasFile && (
+            <button
+              type="button"
+              disabled={replacing || deleting}
+              onClick={handleDelete}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 bg-white border border-red-200 rounded hover:bg-red-50 disabled:opacity-50"
+              title="Delete file"
+            >
+              {deleting ? (
+                <>
+                  <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Scalar fields */}
-      {scalarFields.length > 0 && (
-        <dl className="divide-y divide-gray-100">
-          {scalarFields.map(([key, value]) => (
-            <div
-              key={key}
-              className="grid grid-cols-2 gap-4 px-4 py-2 text-sm"
-            >
-              <dt className="font-medium text-gray-500 capitalize">
-                {key.replace(/_/g, ' ')}
-              </dt>
-              <dd className="text-gray-900">{String(value)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      {/* Body — only shown when a file is present */}
+      {hasFile && (
+        <>
+          {/* Scalar fields */}
+          {scalarFields.length > 0 && (
+            <dl className="divide-y divide-gray-100">
+              {scalarFields.map(([key, value]) => (
+                <div
+                  key={key}
+                  className="grid grid-cols-2 gap-4 px-4 py-2 text-sm"
+                >
+                  <dt className="font-medium text-gray-500 capitalize">
+                    {key.replace(/_/g, ' ')}
+                  </dt>
+                  <dd className="text-gray-900">{String(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
-      {/* Line items table */}
-      {doc.lineItems && doc.lineItems.length > 0 && (
-        <div className="px-4 py-3 border-t border-gray-100">
-          <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
-            Line Items
-          </p>
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-left">
-                <th className="px-2 py-1.5 font-medium text-gray-500">Description</th>
-                <th className="px-2 py-1.5 font-medium text-gray-500 text-right">Qty</th>
-                <th className="px-2 py-1.5 font-medium text-gray-500 text-right">Unit Price</th>
-                <th className="px-2 py-1.5 font-medium text-gray-500 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {doc.lineItems.map((item, idx) => (
-                <tr key={idx} className="hover:bg-gray-50">
-                  <td className="px-2 py-1.5 text-gray-800">{item.description}</td>
-                  <td className="px-2 py-1.5 text-gray-700 text-right">
-                    {item.quantity ?? '—'}
-                  </td>
-                  <td className="px-2 py-1.5 text-gray-700 text-right">
-                    {item.unitPrice != null
-                      ? item.unitPrice.toLocaleString(undefined, {
+          {/* Line items table */}
+          {doc.lineItems && doc.lineItems.length > 0 && (
+            <div className="px-4 py-3 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                Line Items
+              </p>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left">
+                    <th className="px-2 py-1.5 font-medium text-gray-500">Description</th>
+                    <th className="px-2 py-1.5 font-medium text-gray-500 text-right">Qty</th>
+                    <th className="px-2 py-1.5 font-medium text-gray-500 text-right">Unit Price</th>
+                    <th className="px-2 py-1.5 font-medium text-gray-500 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {doc.lineItems.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-2 py-1.5 text-gray-800">{item.description}</td>
+                      <td className="px-2 py-1.5 text-gray-700 text-right">
+                        {item.quantity ?? '—'}
+                      </td>
+                      <td className="px-2 py-1.5 text-gray-700 text-right">
+                        {item.unitPrice != null
+                          ? item.unitPrice.toLocaleString(undefined, {
+                              style: 'currency',
+                              currency: 'USD',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-2 py-1.5 font-medium text-gray-900 text-right">
+                        {item.amount.toLocaleString(undefined, {
                           style: 'currency',
                           currency: 'USD',
-                        })
-                      : '—'}
-                  </td>
-                  <td className="px-2 py-1.5 font-medium text-gray-900 text-right">
-                    {item.amount.toLocaleString(undefined, {
-                      style: 'currency',
-                      currency: 'USD',
-                    })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -512,6 +574,11 @@ export default function SubmissionDetailPage() {
   const [rerunning, setRerunning] = useState(false);
   const [rerunError, setRerunError] = useState<string | null>(null);
 
+  // Delete state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -555,6 +622,21 @@ export default function SubmissionDetailPage() {
       setRerunError(err instanceof Error ? err.message : 'Re-run failed.');
     } finally {
       setRerunning(false);
+    }
+  };
+
+  // ── Delete handler ─────────────────────────────────────────────────────────
+  const handleDeleteConfirmed = async () => {
+    if (!id) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await submissionsApi.deleteSubmission(id);
+      navigate('/');
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed.');
+      setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -647,11 +729,43 @@ export default function SubmissionDetailPage() {
                 )}
               </button>
             )}
+
+            <div className="w-px h-6 bg-gray-200 hidden sm:block"></div>
+
+            {/* Delete Submission button */}
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-md shadow-sm hover:bg-red-50 disabled:opacity-50"
+              title="Delete entire submission"
+            >
+              {deleting ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete Submission
+                </>
+              )}
+            </button>
           </div>
         </div>
 
         {rerunError && (
           <p className="mt-3 text-sm text-red-600">{rerunError}</p>
+        )}
+        {deleteError && (
+          <p className="mt-3 text-sm text-red-600">{deleteError}</p>
         )}
       </div>
 
@@ -697,6 +811,55 @@ export default function SubmissionDetailPage() {
                 <button
                   type="button"
                   onClick={() => setShowRerunConfirm(false)}
+                  className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete confirmation modal ─────────────────────────────────────────── */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowDeleteConfirm(false)}
+            />
+            <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+            <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Delete Submission</h3>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-gray-600">
+                        This will permanently delete this submission and all its uploaded files. <strong>This cannot be undone.</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                <button
+                  type="button"
+                  onClick={handleDeleteConfirmed}
+                  className="inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-red-700 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
                   className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm"
                 >
                   Cancel
