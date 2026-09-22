@@ -25,9 +25,6 @@ export default function Layout() {
                 <NavLink to="/" end className={navLinkClass}>
                   Submissions
                 </NavLink>
-                <NavLink to="/groups" className={navLinkClass}>
-                  Groups
-                </NavLink>
                 <NavLink to="/new" className={navLinkClass}>
                   New Submission
                 </NavLink>

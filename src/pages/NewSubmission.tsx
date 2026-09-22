@@ -25,10 +25,6 @@ export default function NewSubmission() {
   const [files, setFiles] = useState<Record<string, File[]>>({});
   const [fileErrors, setFileErrors] = useState<Record<string, string | null>>({});
 
-  // ── Group state ────────────────────────────────────────────────────────────
-  const [saveAsGroup, setSaveAsGroup] = useState(true);
-  const [groupName, setGroupName] = useState('');
-
   // ── Submit state ───────────────────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -94,7 +90,7 @@ export default function NewSubmission() {
     }
 
     try {
-      const result = await submissionsApi.create(selectedCategoryId, validFiles, saveAsGroup, saveAsGroup ? groupName : undefined);
+      const result = await submissionsApi.create(selectedCategoryId, validFiles);
       navigate(`/submissions/${result.id}`);
     } catch (err: unknown) {
       setSubmitError(err instanceof Error ? err.message : 'Submission failed.');
@@ -166,45 +162,6 @@ export default function NewSubmission() {
               ))}
             </div>
           )}
-
-          {/* ── Save as Group ──────────────────────────────────────────────── */}
-          <div className="bg-gray-50 px-4 py-4 rounded-md border border-gray-200">
-            <div className="flex items-start">
-              <div className="flex items-center h-5">
-                <input
-                  id="save-as-group"
-                  type="checkbox"
-                  checked={saveAsGroup}
-                  onChange={(e) => setSaveAsGroup(e.target.checked)}
-                  className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                />
-              </div>
-              <div className="ml-3 text-sm">
-                <label htmlFor="save-as-group" className="font-medium text-gray-700 cursor-pointer">
-                  Save these documents as a reusable Group
-                </label>
-                <p className="text-gray-500">
-                  Groups allow you to run future submissions using these same files without re-uploading them.
-                </p>
-              </div>
-            </div>
-
-            {saveAsGroup && (
-              <div className="mt-4 ml-7">
-                <label htmlFor="group-name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Group Name <span className="text-gray-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  id="group-name"
-                  value={groupName}
-                  onChange={(e) => setGroupName(e.target.value)}
-                  placeholder="e.g. Monthly Supplier Invoice"
-                  className="block w-full sm:text-sm border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 py-2 px-3 border"
-                />
-              </div>
-            )}
-          </div>
 
           {/* ── Backend error ─────────────────────────────────────────────── */}
           {submitError && (

@@ -179,8 +179,33 @@ export const submissionsApi = {
     return normaliseDetail(raw);
   },
 
+  /**
+   * Replace a single document file on an existing submission.
+   * PATCH /api/submissions/{id}/files with the file under its exact key (invoice/po/grn).
+   */
+  async replaceFile(id: string, docType: string, file: File): Promise<SubmissionDetail> {
+    const form = new FormData();
+    let key = docType.trim().toLowerCase();
+    if (key.includes('invoice')) key = 'invoice';
+    else if (key.includes('po') || key.includes('purchase')) key = 'po';
+    else if (key.includes('grn') || key.includes('goods')) key = 'grn';
+    form.append(key, file);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await apiClient.patchForm<any>(`/submissions/${id}/files`, form);
+    return normaliseDetail(raw);
+  },
+
+  /**
+   * Re-run verification on an existing submission.
+   * POST /api/submissions/{id}/rerun — returns the updated submission.
+   */
+  async rerun(id: string): Promise<SubmissionDetail> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await apiClient.post<any>(`/submissions/${id}/rerun`, {});
+    return normaliseDetail(raw);
+  },
+
   override(id: string, payload: OverrideRequest): Promise<OverrideResponse> {
     return apiClient.post<OverrideResponse>(`/submissions/${id}/override`, payload);
   },
 };
-

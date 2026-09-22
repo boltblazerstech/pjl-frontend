@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import type { FormEvent } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { submissionsApi } from '../api/submissions';
 import StatusBadge from '../components/StatusBadge';
@@ -19,6 +19,10 @@ const OVERRIDE_STATUSES: SubmissionStatus[] = [
   'OVERRIDDEN',
 ];
 
+const TERMINAL_STATUSES: SubmissionStatus[] = [
+  'GREEN', 'AMBER', 'RED', 'FAILED', 'APPROVED', 'REJECTED', 'OVERRIDDEN', 'COMPLETED',
+];
+
 function formatDate(iso: string) {
   if (!iso) return 'Unknown date';
   const d = new Date(iso);
@@ -32,7 +36,39 @@ function formatDate(iso: string) {
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 /** Renders one extracted document card with fields + optional line-items table */
-function ExtractedDocCard({ doc }: { doc: ExtractedDocument }) {
+function ExtractedDocCard({
+  doc,
+  submissionId,
+  onReplaced,
+}: {
+  doc: ExtractedDocument;
+  submissionId: string;
+  onReplaced: (updated: SubmissionDetail) => void;
+}) {
+  const [replacing, setReplacing] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setReplacing(true);
+    setSuccess(false);
+    setError(null);
+    try {
+      const updated = await submissionsApi.replaceFile(submissionId, doc.documentType, file);
+      onReplaced(updated);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to replace file.');
+    } finally {
+      setReplacing(false);
+    }
+  };
+
   // Separate scalar fields from arrays so they render cleanly
   const scalarFields = Object.entries(doc.fields).filter(
     ([, v]) => v !== null && v !== '' && !Array.isArray(v),
@@ -40,9 +76,53 @@ function ExtractedDocCard({ doc }: { doc: ExtractedDocument }) {
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      {/* Card header */}
-      <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+      {/* Card header with Replace button */}
+      <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-gray-800">{doc.documentType}</h4>
+        <div className="flex items-center gap-2">
+          {success && (
+            <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+              Replaced
+            </span>
+          )}
+          {error && (
+            <span className="text-xs text-red-600 truncate max-w-48">{error}</span>
+          )}
+          <button
+            type="button"
+            disabled={replacing}
+            onClick={() => inputRef.current?.click()}
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50"
+          >
+            {replacing ? (
+              <>
+                <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Uploading…
+              </>
+            ) : (
+              <>
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Replace file
+              </>
+            )}
+          </button>
+          <input
+            type="file"
+            accept=".pdf,image/*"
+            ref={inputRef}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
       </div>
 
       {/* Scalar fields */}
@@ -253,8 +333,6 @@ function CombinedAnalysisSection({
 
   // Terminal state but no lines produced → extraction failed
   if (items.length === 0) {
-    // Only show the failure banner for genuinely failed submissions.
-    // For COMPLETED / APPROVED / etc. with no match data, show a neutral message.
     if (status === 'FAILED') {
       return <FailureBanner auditTrail={auditTrail} />;
     }
@@ -429,6 +507,11 @@ export default function SubmissionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Re-run state
+  const [showRerunConfirm, setShowRerunConfirm] = useState(false);
+  const [rerunning, setRerunning] = useState(false);
+  const [rerunError, setRerunError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -446,19 +529,34 @@ export default function SubmissionDetailPage() {
     load();
   }, [load]);
 
-  // Poll for updates if the submission is still processing
+  // Poll when in-flight (fresh or after re-run)
   useEffect(() => {
     if (!submission) return;
-    const isProcessing = submission.status === 'PENDING' || submission.status === 'PROCESSING';
-    if (!isProcessing) return;
+    const isInFlight = submission.status === 'PENDING' || submission.status === 'PROCESSING';
+    if (!isInFlight) return;
 
     const intervalId = setInterval(() => {
-      // We don't set loading=true here to avoid flashing the UI
       load();
     }, 3000);
 
     return () => clearInterval(intervalId);
   }, [submission?.status, load]);
+
+  // ── Re-run handler ─────────────────────────────────────────────────────────
+  const handleRerunConfirmed = async () => {
+    if (!id) return;
+    setShowRerunConfirm(false);
+    setRerunning(true);
+    setRerunError(null);
+    try {
+      const updated = await submissionsApi.rerun(id);
+      setSubmission(updated);
+    } catch (err: unknown) {
+      setRerunError(err instanceof Error ? err.message : 'Re-run failed.');
+    } finally {
+      setRerunning(false);
+    }
+  };
 
   // Optimistic update after override — no full reload
   const handleOverrideSuccess = (updated: SubmissionDetail) => {
@@ -491,6 +589,7 @@ export default function SubmissionDetailPage() {
   }
 
   const canOverride = submission.status !== 'APPROVED';
+  const isTerminal = TERMINAL_STATUSES.includes(submission.status as SubmissionStatus);
 
   // ── Main render ─────────────────────────────────────────────────────────────
   return (
@@ -513,16 +612,100 @@ export default function SubmissionDetailPage() {
               Submitted {formatDate(submission.submittedAt)}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {submission.warrantyStatus && (
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
                 {submission.warrantyStatus}
               </span>
             )}
             <StatusBadge status={submission.status} />
+
+            {/* Re-run button — only available when in a terminal state */}
+            {isTerminal && (
+              <button
+                type="button"
+                disabled={rerunning}
+                onClick={() => setShowRerunConfirm(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {rerunning ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Re-running…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Re-run
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
+
+        {rerunError && (
+          <p className="mt-3 text-sm text-red-600">{rerunError}</p>
+        )}
       </div>
+
+      {/* ── Re-run confirmation modal ─────────────────────────────────────────── */}
+      {showRerunConfirm && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowRerunConfirm(false)}
+            />
+            <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+            <div className="inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <svg className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Re-run Verification</h3>
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-gray-600">
+                        This will replace this submission's current results. <strong>This cannot be undone.</strong>
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        If you want to keep the current result, create a new submission instead.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                <button
+                  type="button"
+                  onClick={handleRerunConfirmed}
+                  className="inline-flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Proceed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRerunConfirm(false)}
+                  className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Extracted Documents ──────────────────────────────────────────────── */}
       <section className="bg-white shadow sm:rounded-lg px-6 py-5">
@@ -536,7 +719,12 @@ export default function SubmissionDetailPage() {
         ) : (
           <div className="space-y-4">
             {submission.extractedDocuments.map((doc, idx) => (
-              <ExtractedDocCard key={idx} doc={doc} />
+              <ExtractedDocCard
+                key={idx}
+                doc={doc}
+                submissionId={submission.id}
+                onReplaced={setSubmission}
+              />
             ))}
           </div>
         )}
