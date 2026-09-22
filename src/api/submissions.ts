@@ -213,12 +213,10 @@ export const submissionsApi = {
 
   /**
    * Re-run verification on an existing submission.
-   * POST /api/submissions/{id}/rerun — returns the updated submission.
+   * POST /api/submissions/{id}/rerun
    */
-  async rerun(id: string): Promise<SubmissionDetail> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw = await apiClient.post<any>(`/submissions/${id}/rerun`, {});
-    return normaliseDetail(raw);
+  async rerun(id: string): Promise<void> {
+    await apiClient.post(`/submissions/${id}/rerun`, {});
   },
 
   override(id: string, payload: OverrideRequest): Promise<OverrideResponse> {
