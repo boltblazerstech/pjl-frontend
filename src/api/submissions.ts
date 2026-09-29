@@ -73,12 +73,16 @@ function normaliseDetail(raw: any): SubmissionDetail {
     categoryId: String(raw.categoryId ?? raw.category_id ?? ''),
     categoryName: raw.categoryName ?? raw.category_name ?? raw.categoryId ?? '',
     submittedAt: raw.uploadedAt ?? raw.submittedAt ?? raw.submitted_at ?? raw.createdAt ?? raw.created_at ?? raw.createdDate ?? raw.created_date ?? '',
+    invoiceOnly: raw.invoiceOnly ?? raw.invoice_only ?? false,
     overrideReason: raw.reviewerNotes ?? raw.overrideReason ?? raw.override_reason,
     overriddenBy: raw.overriddenBy ?? raw.overridden_by,
     warrantyStatus: raw.warrantyStatus ?? raw.warranty_status,
     extractedDocuments: (raw.documents ?? raw.extractedDocuments ?? raw.extracted_documents ?? []).map((doc: any) => ({
       documentType: doc.docType ?? doc.documentType ?? doc.document_type ?? 'Document',
       originalFilename: doc.originalFilename ?? doc.original_filename ?? doc.filename ?? doc.fileRef ?? doc.file_ref ?? null,
+      fromRamcoImport: doc.fromRamcoImport ?? doc.from_ramco_import ?? doc.ramcoImport ?? false,
+      ramcoImportDate: doc.ramcoImportDate ?? doc.ramco_import_date ?? doc.importDate ?? doc.import_date ?? null,
+      ramcoGrnNumber: doc.ramcoGrnNumber ?? doc.ramco_grn_number ?? doc.grnNumber ?? doc.grn_number ?? null,
       fields: doc.fields ?? {},
       lineItems: (doc.lineItems ?? doc.line_items ?? []).map((item: any) => ({
         description: item.description,
@@ -173,6 +177,21 @@ export const submissionsApi = {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw = await apiClient.postForm<any>('/submissions', form);
+    return normaliseDetail(raw);
+  },
+
+  /**
+   * Submit an invoice-only submission (PO/GRN data comes from Ramco import).
+   * POST /api/submissions/invoice-only    multipart field: "invoice" (one or more files)
+   */
+  async createInvoiceOnly(categoryId: string, invoiceFiles: File[]): Promise<SubmissionDetail> {
+    const form = new FormData();
+    form.append('billCategoryId', categoryId);
+    for (const file of invoiceFiles) {
+      form.append('invoice', file);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await apiClient.postForm<any>('/submissions/invoice-only', form);
     return normaliseDetail(raw);
   },
 

@@ -21,7 +21,8 @@ export type SubmissionStatus =
   | 'FAILED'
   | 'GREEN'
   | 'AMBER'
-  | 'RED';
+  | 'RED'
+  | 'AWAITING_PO_GRN';
 
 export interface SubmissionSummary {
   id: string;
@@ -54,6 +55,15 @@ export interface ExtractedDocument {
   documentType: string;
   /** Original uploaded filename, e.g. "Invoice-9.pdf" */
   originalFilename?: string | null;
+  /**
+   * Set to true when this doc's data came from a Ramco Excel import
+   * rather than an uploaded file. When true, hide replace/delete controls.
+   */
+  fromRamcoImport?: boolean;
+  /** Date the Ramco import was processed (ISO string) */
+  ramcoImportDate?: string | null;
+  /** GRN number from the Ramco import */
+  ramcoGrnNumber?: string | null;
   fields: Record<string, string | number | null>;
   lineItems?: LineItem[];
 }
@@ -97,6 +107,8 @@ export interface SubmissionDetail {
   categoryId: string;
   categoryName: string;
   submittedAt: string;
+  /** True if this submission was created in invoice-only mode */
+  invoiceOnly?: boolean;
   extractedDocuments: ExtractedDocument[];
   exceptions: Exception[];
   auditTrail: AuditEntry[];
