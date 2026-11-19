@@ -142,4 +142,24 @@ export const poGrnImportsApi = {
     }
     return { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 };
   },
+
+  /**
+   * Delete an import batch and its lines.
+   * DELETE /api/po-grn-imports/{id}
+   */
+  async deleteBatch(id: string | number): Promise<void> {
+    await apiClient.delete(`/po-grn-imports/${id}`);
+  },
+
+  /**
+   * Delete multiple import batches.
+   * POST /api/po-grn-imports/batch-delete (with fallback to parallel DELETE)
+   */
+  async deleteBatches(ids: Array<string | number>): Promise<void> {
+    try {
+      await apiClient.post('/po-grn-imports/batch-delete', ids.map(Number));
+    } catch {
+      await Promise.all(ids.map((id) => this.deleteBatch(id)));
+    }
+  },
 };
