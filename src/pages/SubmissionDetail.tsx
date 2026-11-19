@@ -68,15 +68,6 @@ function ExceptionsSection({ exceptions }: { exceptions: Exception[] }) {
 
               {/* Reason */}
               <p className="text-sm text-amber-700 mt-1">{ex.reason}</p>
-
-              {/* Metadata: actor + timestamp (only for audit-log-shaped exceptions) */}
-              {(ex.actor || ex.createdAt) && (
-                <p className="text-xs text-amber-500 mt-1.5">
-                  {ex.actor && <span>by {ex.actor}</span>}
-                  {ex.actor && ex.createdAt && <span className="mx-1">·</span>}
-                  {ex.createdAt && <span>{formatDate(ex.createdAt)}</span>}
-                </p>
-              )}
             </div>
           </div>
         </li>
@@ -93,23 +84,159 @@ function AuditTrailSection({ entries }: { entries: AuditEntry[] }) {
   return (
     <ol className="relative border-l border-gray-200 space-y-0">
       {entries.map((entry) => (
-        <li key={entry.id} className="ml-4 pb-6 last:pb-0">
+        <li key={entry.id} className="ml-4 pb-4 last:pb-0">
           <div className="absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full border-2 border-white bg-indigo-400" />
-          <time className="block text-xs font-normal leading-none text-gray-400 mb-0.5">
-            {formatDate(entry.timestamp)}
-          </time>
           <p className="text-sm font-semibold text-gray-800">
             {entry.action}
-            <span className="ml-2 text-xs font-normal text-gray-500">
-              by {entry.actor}
-            </span>
+            {entry.actor && entry.actor !== 'system' && (
+              <span className="ml-2 text-xs font-normal text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                by {entry.actor}
+              </span>
+            )}
           </p>
           {entry.detail && (
-            <p className="text-sm text-gray-600 mt-0.5">{entry.detail}</p>
+            <p className="text-xs text-gray-600 mt-0.5">{entry.detail}</p>
           )}
         </li>
       ))}
     </ol>
+  );
+}
+
+/** Verification Checklist scorecard showing what was checked and what was not */
+function VerificationChecklist({ submission }: { submission: SubmissionDetail }) {
+  const codes = new Set(submission.exceptions.map(e => e.code));
+
+  const checks = [
+    {
+      name: 'PO & Supplier Match',
+      desc: 'Invoice supplier matches approved Purchase Order',
+      status: codes.has('MISSING_DOCUMENT') || codes.has('SUPPLIER_MISMATCH') ? 'failed' : 'passed',
+      detail: codes.has('SUPPLIER_MISMATCH') ? 'Supplier details mismatch PO' : 'Matched to approved PO',
+    },
+    {
+      name: 'Line Math Calculations',
+      desc: 'Line amount = Quantity × Rate per line item',
+      status: codes.has('CALC_MISMATCH') ? 'failed' : 'passed',
+      detail: codes.has('CALC_MISMATCH') ? 'Calculation discrepancy detected' : 'All line calculations verified',
+    },
+    {
+      name: 'Tax & Grand Total Reconciliation',
+      desc: 'Subtotal + taxes + charges = Total invoice value',
+      status: codes.has('TOTAL_MISMATCH') || codes.has('TAX_MISMATCH') ? 'failed' : 'passed',
+      detail: codes.has('TOTAL_MISMATCH') ? 'Invoice grand total mismatch' : 'Taxes and grand total reconciled',
+    },
+    {
+      name: 'Quantity vs GRN Accepted',
+      desc: 'Invoiced quantity ≤ Goods accepted at plant',
+      status: codes.has('QTY_EXCEEDS_GRN') ? 'warning' : 'passed',
+      detail: codes.has('QTY_EXCEEDS_GRN') ? 'Invoiced quantity exceeds GRN accepted quantity' : 'Quantity fully accepted in GRN',
+    },
+    {
+      name: 'Unit Rate vs Approved PO',
+      desc: 'Invoiced unit rate ≤ Approved PO purchase rate',
+      status: codes.has('RATE_EXCEEDS_PO') ? 'warning' : 'passed',
+      detail: codes.has('RATE_EXCEEDS_PO') ? 'Invoiced rate exceeds PO rate' : 'Conforms to approved PO rate',
+    },
+    {
+      name: 'Historical Rate Benchmark (Ramco ERP)',
+      desc: 'Compared against past purchase records from Ramco ERP',
+      status: codes.has('HISTORICAL_RATE_HIGH') ? 'warning' : 'passed',
+      detail: codes.has('HISTORICAL_RATE_HIGH') ? 'Current rate > 10% above last purchased price' : 'Within normal price variance (< 10%)',
+    },
+    {
+      name: 'Warranty Terms',
+      desc: 'PO warranty requirement vs. Invoice terms',
+      status: submission.warrantyStatus === 'DENIED' ? 'warning' : 'info',
+      detail: submission.warrantyStatus === 'STATED' ? 'Warranty stated on invoice' : submission.warrantyStatus === 'DENIED' ? 'Warranty explicitly refused' : 'Not mentioned on invoice (standard spares)',
+    },
+    {
+      name: 'Live Open-Market Benchmarking',
+      desc: 'Real-time vendor web inquiry / third-party market scrapers',
+      status: 'not_checked',
+      detail: 'Not checked (Phase 3 SOW - External vendor market inquiry)',
+    },
+  ];
+
+  return (
+    <section className="bg-white shadow sm:rounded-lg px-6 py-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <span>Verification Checklist</span>
+            <span className="text-xs font-normal text-gray-500">
+              Automated commercial & technical controls
+            </span>
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Overview of commercial rules verified by the system and their outcomes for this invoice.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {checks.map((c, i) => (
+          <div
+            key={i}
+            className={`flex items-start gap-3 p-3 rounded-lg border text-xs ${
+              c.status === 'passed'
+                ? 'bg-green-50/50 border-green-200'
+                : c.status === 'warning'
+                ? 'bg-amber-50/60 border-amber-200'
+                : c.status === 'failed'
+                ? 'bg-red-50/60 border-red-200'
+                : c.status === 'info'
+                ? 'bg-blue-50/50 border-blue-200'
+                : 'bg-gray-50 border-gray-200 opacity-75'
+            }`}
+          >
+            <span className="flex-shrink-0 text-base leading-none mt-0.5">
+              {c.status === 'passed' && '✅'}
+              {c.status === 'warning' && '⚠️'}
+              {c.status === 'failed' && '❌'}
+              {c.status === 'info' && 'ℹ️'}
+              {c.status === 'not_checked' && '⏸️'}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-bold text-gray-900 truncate">{c.name}</span>
+                <span
+                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded capitalize ${
+                    c.status === 'passed'
+                      ? 'bg-green-100 text-green-800'
+                      : c.status === 'warning'
+                      ? 'bg-amber-100 text-amber-800'
+                      : c.status === 'failed'
+                      ? 'bg-red-100 text-red-800'
+                      : c.status === 'info'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}
+                >
+                  {c.status === 'not_checked' ? 'Not Checked' : c.status}
+                </span>
+              </div>
+              <p className="text-gray-500 text-[11px] mt-0.5">{c.desc}</p>
+              <p
+                className={`mt-1 font-medium text-[11px] ${
+                  c.status === 'passed'
+                    ? 'text-green-700'
+                    : c.status === 'warning'
+                    ? 'text-amber-700'
+                    : c.status === 'failed'
+                    ? 'text-red-700'
+                    : c.status === 'info'
+                    ? 'text-blue-700'
+                    : 'text-gray-500 italic'
+                }`}
+              >
+                {c.detail}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -812,6 +939,9 @@ export default function SubmissionDetailPage() {
         </h2>
         <ExceptionsSection exceptions={submission.exceptions} />
       </section>
+
+      {/* ── Verification Checklist (What was checked & what was not) ──────────── */}
+      <VerificationChecklist submission={submission} />
 
       {/* ── Audit Trail ──────────────────────────────────────────────────────── */}
       <section className="bg-white shadow sm:rounded-lg px-6 py-5">
