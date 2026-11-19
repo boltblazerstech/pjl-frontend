@@ -150,12 +150,6 @@ function VerificationChecklist({ submission }: { submission: SubmissionDetail })
       status: submission.warrantyStatus === 'DENIED' ? 'warning' : 'info',
       detail: submission.warrantyStatus === 'STATED' ? 'Warranty stated on invoice' : submission.warrantyStatus === 'DENIED' ? 'Warranty explicitly refused' : 'Not mentioned on invoice (standard spares)',
     },
-    {
-      name: 'Live Open-Market Benchmarking',
-      desc: 'Real-time vendor web inquiry / third-party market scrapers',
-      status: 'not_checked',
-      detail: 'Not checked (Phase 3 SOW - External vendor market inquiry)',
-    },
   ];
 
   return (
