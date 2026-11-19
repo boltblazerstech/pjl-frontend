@@ -5,6 +5,7 @@ import { submissionsApi } from '../api/submissions';
 import StatusBadge from '../components/StatusBadge';
 import type {
   SubmissionDetail,
+  SubmissionInvoiceItem,
   MatchedLineItem,
   ExtractedDocument,
   Exception,
@@ -887,6 +888,59 @@ export default function SubmissionDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Invoice Selector (multi-invoice submissions) ──────────────────── */}
+      {submission.invoices && submission.invoices.length > 1 && (
+        <section className="bg-white shadow sm:rounded-lg px-6 py-5">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">
+            Invoices in this Submission
+            <span className="ml-2 text-xs font-normal text-gray-500">
+              {submission.invoices.length} invoices
+            </span>
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {submission.invoices.map((inv: SubmissionInvoiceItem) => {
+              const isActive = String(inv.submissionId) === String(submission.id);
+              return (
+                <button
+                  key={inv.submissionId}
+                  onClick={() => {
+                    if (!isActive) {
+                      navigate(`/submissions/${inv.submissionId}`);
+                    }
+                  }}
+                  className={`text-left rounded-lg border-2 p-3 transition-all ${
+                    isActive
+                      ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200'
+                      : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-gray-900 truncate">
+                      #{inv.invoiceNo}
+                    </span>
+                    <StatusBadge status={inv.status} />
+                  </div>
+                  {inv.supplierName && (
+                    <p className="text-xs text-gray-600 truncate">{inv.supplierName}</p>
+                  )}
+                  <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                    {inv.totalAmount != null && (
+                      <span>₹{Number(inv.totalAmount).toLocaleString('en-IN')}</span>
+                    )}
+                    <span>{inv.lineItemCount} lines</span>
+                    {inv.exceptionCount > 0 && (
+                      <span className="text-red-600 font-medium">
+                        {inv.exceptionCount} exception{inv.exceptionCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {/* ── Extracted Documents ──────────────────────────────────────────────── */}

@@ -500,6 +500,11 @@ export default function SubmissionsList() {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-700">
                       {row.invoiceNo ?? <span className="text-gray-400">-</span>}
+                      {(row.invoiceCount ?? 1) > 1 && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                          {row.invoiceCount} Invoices
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4"><StatusBadge status={row.status} /></td>
                     <td className="px-6 py-4 text-sm text-gray-500">{formatDate(row.submittedAt)}</td>

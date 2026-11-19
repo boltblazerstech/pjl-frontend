@@ -32,6 +32,7 @@ export interface SubmissionSummary {
   submittedAt: string;
   supplierName?: string | null;
   invoiceNo?: string | null;
+  invoiceCount?: number;
 }
 
 export interface PaginatedSubmissions {
@@ -101,6 +102,16 @@ export interface MatchedLineItem {
   exception?: string | null;
 }
 
+export interface SubmissionInvoiceItem {
+  submissionId: number;
+  invoiceNo: string;
+  supplierName?: string | null;
+  totalAmount?: number | null;
+  status: SubmissionStatus;
+  lineItemCount: number;
+  exceptionCount: number;
+}
+
 export interface SubmissionDetail {
   id: string;
   status: SubmissionStatus;
@@ -117,6 +128,8 @@ export interface SubmissionDetail {
   overriddenBy?: string;
   overrideReason?: string;
   overrideStatus?: string;
+  parentSubmissionId?: string | number | null;
+  invoices?: SubmissionInvoiceItem[];
 }
 
 // ─── Override ─────────────────────────────────────────────────────────────────

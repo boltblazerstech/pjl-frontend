@@ -62,6 +62,7 @@ export function normaliseRow(raw: any): SubmissionSummary {
     submittedAt: raw.uploadedAt ?? raw.submittedAt ?? raw.submitted_at ?? raw.createdAt ?? raw.created_at ?? raw.createdDate ?? raw.created_date ?? '',
     supplierName: raw.supplierName ?? raw.supplier_name ?? null,
     invoiceNo: raw.invoiceNo ?? raw.invoice_no ?? raw.invoiceNumber ?? raw.invoice_number ?? null,
+    invoiceCount: raw.invoiceCount ?? raw.invoice_count ?? 1,
   };
 }
 
@@ -127,6 +128,16 @@ function normaliseDetail(raw: any): SubmissionDetail {
       poRate:         item.poRate          ?? item.po_rate         ?? null,
       grnAcceptedQty: item.grnAcceptedQuantity ?? item.grnAcceptedQty ?? item.grn_accepted_qty ?? item.grnQty ?? null,
       exception:      item.exception ?? item.exceptionReason ?? item.exception_reason ?? null,
+    })),
+    parentSubmissionId: raw.parentSubmissionId ?? raw.parent_submission_id ?? null,
+    invoices: (raw.invoices ?? []).map((inv: any) => ({
+      submissionId: inv.submissionId ?? inv.submission_id ?? inv.id,
+      invoiceNo: inv.invoiceNo ?? inv.invoice_no ?? '',
+      supplierName: inv.supplierName ?? inv.supplier_name ?? null,
+      totalAmount: inv.totalAmount ?? inv.total_amount ?? null,
+      status: inv.status ?? 'PENDING',
+      lineItemCount: inv.lineItemCount ?? inv.line_item_count ?? 0,
+      exceptionCount: inv.exceptionCount ?? inv.exception_count ?? 0,
     })),
   };
 }
