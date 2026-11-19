@@ -694,59 +694,86 @@ export default function SubmissionDetailPage() {
       {/* ── Invoice Selector (multi-invoice submissions) ──────────────────── */}
       {submission.invoices && submission.invoices.length > 1 && (
         <section className="bg-white shadow sm:rounded-lg px-6 py-5 border-l-4 border-indigo-600">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
                 <span>📄 Invoices in this Submission</span>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
                   {submission.invoices.length} Invoices
                 </span>
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Click on any invoice below to view its dedicated 3-way match analysis and exceptions.
+                Select an invoice to view its individual 3-way match Combined Analysis and exceptions.
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+
+          {/* List-type view for invoices */}
+          <div className="overflow-hidden rounded-lg border border-gray-200 divide-y divide-gray-100 bg-white shadow-xs">
             {submission.invoices.map((inv: SubmissionInvoiceItem) => {
               const isActive = String(inv.submissionId) === String(submission.id);
               return (
-                <button
+                <div
                   key={inv.submissionId}
                   onClick={() => {
                     if (!isActive) {
                       navigate(`/submissions/${inv.submissionId}`);
                     }
                   }}
-                  className={`text-left rounded-lg border-2 p-3 transition-all cursor-pointer ${
+                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:px-4 sm:py-3 transition-colors cursor-pointer gap-2 ${
                     isActive
-                      ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-300 shadow-sm'
-                      : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-gray-50'
+                      ? 'bg-indigo-50/80 border-l-4 border-l-indigo-600'
+                      : 'hover:bg-gray-50/80 border-l-4 border-l-transparent'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-sm font-bold text-gray-900 truncate">
-                      Invoice #{inv.invoiceNo}
-                    </span>
-                    <StatusBadge status={inv.status} />
-                  </div>
-                  {inv.supplierName && (
-                    <p className="text-xs text-gray-600 truncate font-medium">{inv.supplierName}</p>
-                  )}
-                  <div className="mt-2 flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
-                    <span className="font-semibold text-gray-700">
-                      {inv.totalAmount != null ? `₹${Number(inv.totalAmount).toLocaleString('en-IN')}` : '—'}
-                    </span>
-                    <span>{inv.lineItemCount} lines</span>
-                    {inv.exceptionCount > 0 ? (
-                      <span className="text-red-600 font-bold">
-                        {inv.exceptionCount} exc
+                  {/* Left: Invoice No & Supplier */}
+                  <div className="flex items-center gap-3 min-w-0 sm:w-2/5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`text-sm font-bold truncate ${isActive ? 'text-indigo-900' : 'text-gray-900'}`}>
+                        #{inv.invoiceNo}
                       </span>
-                    ) : (
-                      <span className="text-green-600 font-medium">0 exc</span>
+                      {isActive && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-200/80 text-indigo-800">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    {inv.supplierName && (
+                      <span className="text-xs text-gray-500 truncate hidden md:inline">
+                        · {inv.supplierName}
+                      </span>
                     )}
                   </div>
-                </button>
+
+                  {/* Middle: Amount, Line count, Exception count */}
+                  <div className="flex items-center gap-4 sm:gap-6 text-xs text-gray-600">
+                    <span className="font-semibold text-gray-900 text-sm">
+                      {inv.totalAmount != null ? `₹${Number(inv.totalAmount).toLocaleString('en-IN')}` : '—'}
+                    </span>
+                    <span className="text-gray-500">
+                      {inv.lineItemCount} {inv.lineItemCount === 1 ? 'line' : 'lines'}
+                    </span>
+                    {inv.exceptionCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 font-semibold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded text-xs">
+                        ⚠️ {inv.exceptionCount} {inv.exceptionCount === 1 ? 'exception' : 'exceptions'}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center font-medium text-green-700 bg-green-50 border border-green-100 px-2 py-0.5 rounded text-xs">
+                        ✓ 0 exceptions
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Right: Status badge & View link */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:w-1/4">
+                    <StatusBadge status={inv.status} />
+                    <span className={`text-xs font-semibold flex items-center gap-1 ${
+                      isActive ? 'text-indigo-700' : 'text-indigo-600 group-hover:text-indigo-800'
+                    }`}>
+                      {isActive ? 'Selected' : 'View →'}
+                    </span>
+                  </div>
+                </div>
               );
             })}
           </div>
