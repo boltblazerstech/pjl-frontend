@@ -728,16 +728,9 @@ export default function SubmissionDetailPage() {
                 >
                   {/* Left: Invoice No & Supplier */}
                   <div className="flex items-center gap-3 min-w-0 sm:w-2/5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`text-sm font-bold truncate ${isActive ? 'text-indigo-900' : 'text-gray-900'}`}>
-                        #{inv.invoiceNo}
-                      </span>
-                      {isActive && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-200/80 text-indigo-800">
-                          Active
-                        </span>
-                      )}
-                    </div>
+                    <span className={`text-sm font-bold truncate ${isActive ? 'text-indigo-900' : 'text-gray-900'}`}>
+                      #{inv.invoiceNo}
+                    </span>
                     {inv.supplierName && (
                       <span className="text-xs text-gray-500 truncate hidden md:inline">
                         · {inv.supplierName}
@@ -764,14 +757,9 @@ export default function SubmissionDetailPage() {
                     )}
                   </div>
 
-                  {/* Right: Status badge & View link */}
-                  <div className="flex items-center justify-between sm:justify-end gap-3 sm:w-1/4">
+                  {/* Right: Status badge */}
+                  <div className="flex items-center justify-end">
                     <StatusBadge status={inv.status} />
-                    <span className={`text-xs font-semibold flex items-center gap-1 ${
-                      isActive ? 'text-indigo-700' : 'text-indigo-600 group-hover:text-indigo-800'
-                    }`}>
-                      {isActive ? 'Selected' : 'View →'}
-                    </span>
                   </div>
                 </div>
               );
