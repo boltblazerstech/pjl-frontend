@@ -483,8 +483,15 @@ export default function SubmissionDetailPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {submission.warrantyStatus && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                {submission.warrantyStatus}
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200" title="Warranty terms extracted from invoice/PO">
+                <span className="text-gray-400 font-normal">Warranty:</span>
+                {submission.warrantyStatus === 'NOT_MENTIONED'
+                  ? 'Not Mentioned'
+                  : submission.warrantyStatus === 'STATED'
+                  ? 'Stated'
+                  : submission.warrantyStatus === 'DENIED'
+                  ? 'Denied'
+                  : submission.warrantyStatus}
               </span>
             )}
             <StatusBadge status={submission.status} />
