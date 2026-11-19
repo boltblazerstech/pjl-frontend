@@ -892,13 +892,20 @@ export default function SubmissionDetailPage() {
 
       {/* ── Invoice Selector (multi-invoice submissions) ──────────────────── */}
       {submission.invoices && submission.invoices.length > 1 && (
-        <section className="bg-white shadow sm:rounded-lg px-6 py-5">
-          <h2 className="text-base font-semibold text-gray-900 mb-3">
-            Invoices in this Submission
-            <span className="ml-2 text-xs font-normal text-gray-500">
-              {submission.invoices.length} invoices
-            </span>
-          </h2>
+        <section className="bg-white shadow sm:rounded-lg px-6 py-5 border-l-4 border-indigo-600">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span>📄 Invoices in this Submission</span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                  {submission.invoices.length} Invoices
+                </span>
+              </h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Click on any invoice below to view its dedicated 3-way match analysis and exceptions.
+              </p>
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {submission.invoices.map((inv: SubmissionInvoiceItem) => {
               const isActive = String(inv.submissionId) === String(submission.id);
@@ -910,30 +917,32 @@ export default function SubmissionDetailPage() {
                       navigate(`/submissions/${inv.submissionId}`);
                     }
                   }}
-                  className={`text-left rounded-lg border-2 p-3 transition-all ${
+                  className={`text-left rounded-lg border-2 p-3 transition-all cursor-pointer ${
                     isActive
-                      ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200'
+                      ? 'border-indigo-600 bg-indigo-50/80 ring-2 ring-indigo-300 shadow-sm'
                       : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-semibold text-gray-900 truncate">
-                      #{inv.invoiceNo}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm font-bold text-gray-900 truncate">
+                      Invoice #{inv.invoiceNo}
                     </span>
                     <StatusBadge status={inv.status} />
                   </div>
                   {inv.supplierName && (
-                    <p className="text-xs text-gray-600 truncate">{inv.supplierName}</p>
+                    <p className="text-xs text-gray-600 truncate font-medium">{inv.supplierName}</p>
                   )}
-                  <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-                    {inv.totalAmount != null && (
-                      <span>₹{Number(inv.totalAmount).toLocaleString('en-IN')}</span>
-                    )}
+                  <div className="mt-2 flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                    <span className="font-semibold text-gray-700">
+                      {inv.totalAmount != null ? `₹${Number(inv.totalAmount).toLocaleString('en-IN')}` : '—'}
+                    </span>
                     <span>{inv.lineItemCount} lines</span>
-                    {inv.exceptionCount > 0 && (
-                      <span className="text-red-600 font-medium">
-                        {inv.exceptionCount} exception{inv.exceptionCount !== 1 ? 's' : ''}
+                    {inv.exceptionCount > 0 ? (
+                      <span className="text-red-600 font-bold">
+                        {inv.exceptionCount} exc
                       </span>
+                    ) : (
+                      <span className="text-green-600 font-medium">0 exc</span>
                     )}
                   </div>
                 </button>
