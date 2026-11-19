@@ -231,6 +231,15 @@ export default function SubmissionsList() {
   const [error, setError] = useState<string | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
 
+  // ── Multi-select & Delete state ───────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<
+    { type: 'single'; id: string; name?: string } | { type: 'batch'; ids: string[] } | null
+  >(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
   const pollerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
@@ -268,6 +277,77 @@ export default function SubmissionsList() {
     }
     return () => { if (pollerRef.current) clearInterval(pollerRef.current); };
   }, [rows, page, statusFilter, fetchPage]);
+
+  // ── Multi-select helpers ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectAllRef.current) {
+      const pageIds = rows.map((r) => r.id);
+      const selectedOnPage = pageIds.filter((id) => selectedIds.has(id)).length;
+      selectAllRef.current.indeterminate = selectedOnPage > 0 && selectedOnPage < pageIds.length;
+    }
+  }, [rows, selectedIds]);
+
+  const toggleSelectAll = () => {
+    const pageIds = rows.map((r) => r.id);
+    const allSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const idsToDelete = deleteTarget.type === 'single' ? [deleteTarget.id] : deleteTarget.ids;
+      const results = await Promise.allSettled(
+        idsToDelete.map((id) => submissionsApi.deleteSubmission(id))
+      );
+      const failed = results.filter((r) => r.status === 'rejected');
+      if (failed.length > 0) {
+        setDeleteError(`Failed to delete ${failed.length} submission(s).`);
+      }
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        idsToDelete.forEach((id) => next.delete(id));
+        return next;
+      });
+      setDeleteTarget(null);
+      // If we deleted everything on this page and page > 1, step back
+      if (rows.length === idsToDelete.length && page > 1) {
+        setPage((p) => p - 1);
+      } else {
+        fetchPage(page, statusFilter);
+      }
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -307,18 +387,54 @@ export default function SubmissionsList() {
         </div>
       </div>
 
-      {/* Filter */}
-      <div className="flex items-center gap-3 mb-4">
-        <label htmlFor="status-filter" className="text-sm font-medium text-gray-600">Status</label>
-        <select id="status-filter" value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value as SubmissionStatus | ''); setPage(1); }}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-          {ALL_STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-        {loading && <span className="text-xs text-gray-400 animate-pulse">Refreshing...</span>}
+      {/* Filter & Selection toolbar */}
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <label htmlFor="status-filter" className="text-sm font-medium text-gray-600">Status</label>
+          <select id="status-filter" value={statusFilter}
+            onChange={(e) => { setStatusFilter(e.target.value as SubmissionStatus | ''); setPage(1); }}
+            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            {ALL_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
+            ))}
+          </select>
+          {loading && <span className="text-xs text-gray-400 animate-pulse">Refreshing...</span>}
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-1.5 shadow-sm">
+            <span className="text-xs font-semibold text-indigo-900">
+              {selectedIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-xs text-indigo-600 hover:text-indigo-800 underline ml-1"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget({ type: 'batch', ids: Array.from(selectedIds) })}
+              className="inline-flex items-center gap-1 ml-2 px-2.5 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700 shadow-sm transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete Selected ({selectedIds.size})
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Delete Error */}
+      {deleteError && (
+        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 mb-4 flex items-center justify-between">
+          <p className="text-sm text-red-700">{deleteError}</p>
+          <button type="button" onClick={() => setDeleteError(null)} className="text-sm text-red-500 hover:text-red-700 font-bold">&times;</button>
+        </div>
+      )}
 
       {/* Error */}
       {error && !loading && (
@@ -332,18 +448,29 @@ export default function SubmissionsList() {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th className="w-12 px-4 py-3 text-left">
+                <input
+                  type="checkbox"
+                  ref={selectAllRef}
+                  checked={rows.length > 0 && rows.every((r) => selectedIds.has(r.id))}
+                  onChange={toggleSelectAll}
+                  disabled={rows.length === 0}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer disabled:opacity-40"
+                  aria-label="Select all"
+                />
+              </th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Supplier</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Invoice No.</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Uploaded</th>
-              <th className="px-6 py-3" />
+              <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {loading && rows.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {[1, 2, 3, 4, 5].map((j) => (
+                  {[1, 2, 3, 4, 5, 6].map((j) => (
                     <td key={j} className="px-6 py-4">
                       <div className="h-4 bg-gray-100 rounded animate-pulse" />
                     </td>
@@ -352,26 +479,51 @@ export default function SubmissionsList() {
               ))
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">No submissions found.</td>
+                <td colSpan={6} className="px-6 py-8 text-center text-sm text-gray-500">No submissions found.</td>
               </tr>
             ) : (
-              rows.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {row.supplierName ?? <span className="text-gray-400">-</span>}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-700">
-                    {row.invoiceNo ?? <span className="text-gray-400">-</span>}
-                  </td>
-                  <td className="px-6 py-4"><StatusBadge status={row.status} /></td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{formatDate(row.submittedAt)}</td>
-                  <td className="px-6 py-4 text-right text-sm">
-                    <Link to={`/submissions/${row.id}`} className="text-indigo-600 hover:text-indigo-900 font-medium">
-                      View &rarr;
-                    </Link>
-                  </td>
-                </tr>
-              ))
+              rows.map((row) => {
+                const isSelected = selectedIds.has(row.id);
+                return (
+                  <tr key={row.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-indigo-50/40' : ''}`}>
+                    <td className="w-12 px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(row.id)}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
+                        aria-label={`Select submission ${row.id}`}
+                      />
+                    </td>
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      {row.supplierName ?? <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-700">
+                      {row.invoiceNo ?? <span className="text-gray-400">-</span>}
+                    </td>
+                    <td className="px-6 py-4"><StatusBadge status={row.status} /></td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{formatDate(row.submittedAt)}</td>
+                    <td className="px-6 py-4 text-right text-sm">
+                      <div className="flex items-center justify-end gap-3">
+                        <Link to={`/submissions/${row.id}`} className="text-indigo-600 hover:text-indigo-900 font-medium">
+                          View &rarr;
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget({ type: 'single', id: row.id, name: row.invoiceNo ?? row.supplierName ?? `#${row.id}` })}
+                          className="text-gray-400 hover:text-red-600 p-1 rounded transition-colors"
+                          title="Delete submission"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -400,6 +552,66 @@ export default function SubmissionsList() {
           onClose={() => setShowImportDialog(false)}
           onImportDone={() => { fetchPage(page, statusFilter); }}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-end justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500/75 transition-opacity"
+              onClick={() => { if (!deleting) setDeleteTarget(null); }}
+            />
+            <span className="hidden sm:inline-block sm:h-screen sm:align-middle" aria-hidden="true">&#8203;</span>
+            <div className="relative inline-block transform overflow-hidden rounded-lg bg-white text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:align-middle">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">
+                      {deleteTarget.type === 'batch'
+                        ? `Delete ${deleteTarget.ids.length} Submissions`
+                        : 'Delete Submission'}
+                    </h3>
+                    <div className="mt-2 space-y-2">
+                      <p className="text-sm text-gray-600">
+                        {deleteTarget.type === 'batch'
+                          ? `Are you sure you want to permanently delete these ${deleteTarget.ids.length} selected submissions and their uploaded files?`
+                          : `Are you sure you want to delete submission ${deleteTarget.name ?? ''}? This will permanently delete the submission data and uploaded files.`}
+                      </p>
+                      <p className="text-xs text-red-600 font-semibold">
+                        This action cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={handleDeleteConfirmed}
+                  className="inline-flex w-full justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-red-700 disabled:opacity-50 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => setDeleteTarget(null)}
+                  className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
